@@ -1,2 +1,7 @@
 # 하네스 세션 로그 — 개인 작업 기록이므로 공유하지 않음
 claude-progress.txt
+
+# 런타임 생성 파일
+.traffic.log
+.traffic.pid
+.flask-external-ip
