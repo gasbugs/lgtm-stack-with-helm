@@ -1,0 +1,50 @@
+# OTel Collector DaemonSet 모드 — 각 노드에서 컨테이너 로그 + 호스트 메트릭 수집
+mode: daemonset
+
+image:
+  repository: otel/opentelemetry-collector-contrib
+  tag: "0.130.0"
+
+presets:
+  logsCollection:
+    enabled: true
+    includeCollectorLogs: false
+  hostMetrics:
+    enabled: true
+  kubernetesAttributes:
+    enabled: true
+  kubeletMetrics:
+    enabled: true
+
+config:
+  receivers:
+    # filelog/hostmetrics/kubeletstats 는 presets 에서 활성화됨
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+  exporters:
+    loki:
+      endpoint: http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push
+    prometheusremotewrite:
+      endpoint: http://my-prom-kube-prometheus-st-prometheus.monitoring.svc.cluster.local:9090/api/v1/write
+      resource_to_telemetry_conversion:
+        enabled: true
+
+  processors:
+    batch: {}
+    # k8sattributes 는 presets.kubernetesAttributes 가 자동 구성
+
+  service:
+    pipelines:
+      logs:
+        receivers: [filelog, otlp]
+        processors: [k8sattributes, batch]
+        exporters: [loki]
+      metrics:
+        receivers: [hostmetrics, kubeletstats, otlp]
+        processors: [k8sattributes, batch]
+        exporters: [prometheusremotewrite]

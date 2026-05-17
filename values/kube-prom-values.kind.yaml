@@ -1,0 +1,57 @@
+# kind 환경에서만 추가로 적용할 오버라이드.
+# deploy.sh가 USE_KIND=1 일 때 base values 와 함께 -f 로 전달함.
+
+# kind는 컨트롤 플레인이 자가 호스팅이므로 모든 시스템 컴포넌트 메트릭 수집 가능
+kubeApiServer:
+  enabled: true
+
+kubelet:
+  enabled: true
+  serviceMonitor:
+    cAdvisor: true
+    probes: true
+    resource: true
+
+kubeControllerManager:
+  enabled: true
+  endpoints: []
+  service:
+    enabled: true
+    port: 10257
+    targetPort: 10257
+  serviceMonitor:
+    https: true
+    insecureSkipVerify: true
+
+kubeScheduler:
+  enabled: true
+  endpoints: []
+  service:
+    enabled: true
+    port: 10259
+    targetPort: 10259
+  serviceMonitor:
+    https: true
+    insecureSkipVerify: true
+
+kubeProxy:
+  enabled: true
+  endpoints: []
+  service:
+    enabled: true
+    port: 10249
+    targetPort: 10249
+
+kubeEtcd:
+  enabled: true
+  endpoints: []
+  service:
+    enabled: true
+    port: 2381
+    targetPort: 2381
+  serviceMonitor:
+    scheme: http
+    insecureSkipVerify: true
+
+coreDns:
+  enabled: true
