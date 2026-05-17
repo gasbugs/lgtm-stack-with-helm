@@ -194,17 +194,82 @@ ConfigMap 라벨 `grafana_dashboard=1` 로 Grafana sidecar가 자동 로드.
 
 ### 2. Kubernetes System (OTel + kube-prom + Cilium) — `/d/k8s-system-otel`
 
-5개 row, 24개 패널로 시스템 컴포넌트 통합:
+5개 row, 24개 패널로 클러스터 시스템 컴포넌트를 통합. **kube-proxy 자리는 Cilium**이 대체(kubeProxyReplacement=true), **노드 신호는 OTel DaemonSet**, **로그는 OTel filelog → Loki**.
 
-| 행 | 패널 | 데이터 출처 |
-|---|---|---|
-| Control Plane | API Server QPS / 5xx% / P99 / etcd leader / Workqueue / CoreDNS QPS / API by verb | kube-prom ServiceMonitor |
-| Node / Host | Load 1m / Memory / Disk I/O / Network I/O / Filesystem | **OTel hostmetrics (DaemonSet)** |
-| Pods | Top10 CPU / Top10 Memory / Pod Network I/O | **OTel kubeletstats (DaemonSet)** |
-| Cilium / Hubble | Endpoints / Flows·Drops·TCP flags KPI / Flows by direction-verdict / Drops by reason / Endpoint state | Cilium/Hubble ServiceMonitor |
-| System Logs | kube-system 컨테이너 로그 (cilium-agent 등) | Loki (OTel agent filelog) |
+변수: `$node` (host_name, multi)
 
-변수: `$node` (host_name)
+---
+
+#### Row 1 — Control Plane (kube-prom)
+
+![Control Plane](docs/screenshots/04-k8s-cp.png)
+
+API Server / etcd / Controller-manager / Scheduler / CoreDNS의 핵심 KPI를 한눈에. 실측 캡처:
+
+| KPI | 값 |
+|---|---|
+| API Server QPS | `5.10 req/s` |
+| API Server 5xx % | `0 %` |
+| API Server P99 | `1 min` (느린 watch 포함) |
+| etcd leader changes (5m) | `0` |
+| Workqueue depth (max) | `3` |
+| CoreDNS QPS | `1.93 req/s` |
+
+하단 시계열: **API Server requests by verb** (APPLY/GET/PUT/PATCH/POST/WATCH 등 verb별 RPS) + **Controller-manager workqueue depth** (`APIServiceRegistrationController`, `DynamicCABundle-*` 등 내부 컨트롤러별 큐 깊이).
+
+---
+
+#### Row 2 — Node / Host (OTel hostmetrics, DaemonSet)
+
+![Node Host](docs/screenshots/05-k8s-host.png)
+
+`system_cpu_load_average_*`, `system_memory_usage_bytes`, `system_disk_io_bytes_total`, `system_network_io_bytes_total`, `system_filesystem_usage_bytes` — 모두 **OTel hostmetrics** receiver가 노드별로 수집.
+
+- **Load 1m**: 클러스터 부팅 직후 5.5까지 치솟았다가 ~0.3 안정화
+- **Memory**: cached 11 GiB / used ~4 GiB
+- **Disk I/O**: 이미지 풀 시점 30 MB/s 스파이크 후 거의 0
+- **Network I/O**: receive 79 kB/s · transmit 155 kB/s (Mean)
+- **Filesystem**: 64.9 GiB → 65.3 GiB로 점진 증가 (스크랩 로그·메트릭 누적)
+
+---
+
+#### Row 3 — Pods (OTel kubeletstats, DaemonSet)
+
+![Pods](docs/screenshots/06-k8s-pods.png)
+
+`k8s_pod_cpu_usage`, `k8s_pod_memory_working_set_bytes`, `k8s_pod_network_io_bytes_total` — kubelet의 `/stats/summary` 를 OTel kubeletstats receiver가 폴링.
+
+- **Top10 CPU**: `cilium-8dvlb`, `cilium-r55p9`, `loki-0`, `loki-gateway`, `my-flask-app`, `my-prom-grafana`, OTel agents 등
+- **Top10 Memory (Working Set)**: `cilium-operator` 가장 높음 (~512 MiB), `cilium-r55p9`/`8dvlb`, `loki-0`, `my-prom-grafana`, `my-flask-app`
+- **Pod Network I/O**: cilium pod들의 receive가 50-90 kB/s (eBPF 데이터플레인 트래픽)
+
+---
+
+#### Row 4 — Cilium / Hubble (KPI + Flows + Drops)
+
+![Cilium Hubble Top](docs/screenshots/07-k8s-cilium-top.png)
+
+eBPF 기반 네트워킹 가시성:
+
+| KPI | 값 |
+|---|---|
+| Cilium endpoints (ready) | `3` |
+| **Hubble flows /s** | `382` |
+| Drops /s | `0.02` |
+| TCP flag events /s | `153` |
+
+- **Hubble Flows by Direction & Verdict**: FORWARDED 16.1K / TRACED 2.73K / TRANSLATED 648 / DROPPED 2.91 — 정상 트래픽 비율이 압도적
+- **Cilium Drops by Reason**: `Unsupported L3 protocol` 만 2.98 (IPv6 RA 등 무해)
+
+---
+
+#### Row 5 — Cilium 상태 + System Logs (Loki)
+
+![Cilium Hubble Bottom](docs/screenshots/08-k8s-cilium-bottom.jpg)
+
+- **TCP Flags Distribution**: FIN 74.8 / SYN-ACK 38.2 / SYN 37.8 / RST 1.18 — RST이 적어 연결 종료가 정상
+- **Cilium Endpoint State Counts**: `ready: 33` 만 (disconnecting/regenerating/restoring 모두 0)
+- **kube-system 컨테이너 로그 (Loki)**: OTel agent의 filelog receiver가 `/var/log/pods/...`를 수집해 Loki로 전송. `cilium-agent`, `cilium-envoy` 등 시스템 컴포넌트 로그가 실시간으로 흐름. 라벨: `service_name="kube-system/<svc>"`, 매칭 쿼리는 `{service_name=~"kube-system/.+"}`
 
 ---
 
