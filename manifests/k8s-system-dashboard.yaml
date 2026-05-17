@@ -169,6 +169,6 @@ data:
         {"type":"logs","title":"kube-system 컨테이너 로그 (Loki)","id":60,"gridPos":{"h":10,"w":24,"x":0,"y":68},
          "datasource":{"type":"loki","uid":"loki"},
          "options":{"showTime":true,"wrapLogMessage":true,"enableLogDetails":true,"sortOrder":"Descending","prettifyLogMessage":false,"showCommonLabels":false},
-         "targets":[{"expr":"{namespace=\"kube-system\"} | line_format \"[{{ .pod }}] {{ __line__ }}\"","refId":"A","maxLines":500}]}
+         "targets":[{"expr":"{service_name=~\"kube-system/.+\"} | line_format \"[{{ .service_name }}] {{ __line__ }}\"","refId":"A","maxLines":500}]}
       ]
     }
