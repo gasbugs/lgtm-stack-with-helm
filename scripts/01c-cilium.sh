@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cilium 설치 — kube-proxy 대체 + prometheus 메트릭 + Hubble L4-L7 관측성
+# Cilium 설치 (1단계) — CNI + Hubble만 우선 활성화. ServiceMonitor는 LGTM(CRD) 설치 후 02b 단계에서 활성화.
 set -euo pipefail
 
 run() {
@@ -9,14 +9,12 @@ run() {
 run helm repo add cilium https://helm.cilium.io/ >/dev/null
 run helm repo update >/dev/null
 
-# kind control-plane 컨테이너 IP/포트 자동 추출 (kubeProxyReplacement 모드)
 if [ "${DRY_RUN:-0}" = "1" ]; then
   API_HOST="lgtm-control-plane"
-  API_PORT=6443
 else
   API_HOST=$(docker inspect lgtm-control-plane --format '{{.NetworkSettings.Networks.kind.IPAddress}}')
-  API_PORT=6443
 fi
+API_PORT=6443
 
 run helm upgrade --install cilium cilium/cilium \
   --version 1.16.4 \
@@ -28,15 +26,8 @@ run helm upgrade --install cilium cilium/cilium \
   --set image.pullPolicy=IfNotPresent \
   --set hubble.enabled=true \
   --set hubble.relay.enabled=true \
-  --set hubble.metrics.enabled="{dns,drop,tcp,flow,icmp,httpV2:exemplars=true;labelsContext=source_ip\,source_namespace\,source_workload\,destination_ip\,destination_namespace\,destination_workload\,traffic_direction}" \
-  --set hubble.metrics.serviceMonitor.enabled=true \
-  --set hubble.metrics.serviceMonitor.trustCRDsExist=true \
   --set prometheus.enabled=true \
-  --set prometheus.serviceMonitor.enabled=true \
-  --set prometheus.serviceMonitor.trustCRDsExist=true \
-  --set operator.prometheus.enabled=true \
-  --set operator.prometheus.serviceMonitor.enabled=true \
-  --set operator.prometheus.serviceMonitor.trustCRDsExist=true
+  --set operator.prometheus.enabled=true
 
 if [ "${DRY_RUN:-0}" != "1" ]; then
   echo "[01c-cilium] cilium 파드 준비 대기..."
@@ -44,4 +35,4 @@ if [ "${DRY_RUN:-0}" != "1" ]; then
   kubectl -n kube-system rollout status deploy/cilium-operator --timeout=180s || true
 fi
 
-echo "[01c-cilium] 완료"
+echo "[01c-cilium] 완료 (1단계 — ServiceMonitor 는 02b 에서 활성화)"

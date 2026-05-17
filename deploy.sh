@@ -47,6 +47,12 @@ steps+=(
 
 steps+=(
   "02-lgtm.sh"
+)
+
+# 02b) cilium ServiceMonitor 활성화 (LGTM CRD 필요)
+[ "${WITH_CILIUM}" = "1" ] && steps+=("02b-cilium-metrics.sh")
+
+steps+=(
   "03-otel.sh"
 )
 
