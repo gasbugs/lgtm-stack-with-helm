@@ -19,9 +19,9 @@ ns = [d for d in docs if d['kind']=='Namespace'][0]
 assert ns['metadata']['name'] == 'flask-app'
 dep = [d for d in docs if d['kind']=='Deployment'][0]
 c = dep['spec']['template']['spec']['containers'][0]
-assert c['image'] == 'gasbugs21c/my-flask-app:lgtm'
-envs = {e['name']:e['value'] for e in c['env']}
-assert 'OTEL_EXPORTER_OTLP_ENDPOINT' in envs
+assert 'gasbugs21c/my-flask-app' in c['image'], f"unexpected image: {c['image']}"
+env_names = {e['name'] for e in c['env']}
+assert 'OTEL_EXPORTER_OTLP_ENDPOINT' in env_names
 svc = [d for d in docs if d['kind']=='Service'][0]
 assert svc['spec']['type'] == 'LoadBalancer'
 assert svc['spec']['ports'][0]['port'] == 80

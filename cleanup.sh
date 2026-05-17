@@ -31,6 +31,7 @@ fi
 
 # 역순 삭제
 run kubectl delete -f "${ROOT}/manifests/flask-app.yaml" --ignore-not-found
+run kubectl delete -f "${ROOT}/manifests/flask-dashboard.yaml" --ignore-not-found
 run kubectl delete -f "${ROOT}/manifests/grafana-datasources.yaml" --ignore-not-found
 run helm uninstall -n otel       otel-collector
 run helm uninstall -n monitoring my-prom
