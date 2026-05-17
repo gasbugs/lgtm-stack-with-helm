@@ -3,6 +3,10 @@
 > Kubernetes(GKE) + OpenTelemetry Collector + **LGTM 스택**(Loki·Grafana·Tempo·Prometheus)을
 > **한 줄 명령으로** 배포하는 통합 관측성(Observability) 실습 환경.
 
+![Dashboard Top](docs/screenshots/01-dashboard-top.png)
+
+> 📸 [실행 결과 스크린샷 더 보기 ↓](#-실행-결과-스크린샷) — 대시보드 / 로그 / 트레이스
+
 ---
 
 ## 한눈에 보기
@@ -96,6 +100,68 @@ DRY_RUN=1 bash deploy.sh
 | `GKE_CLUSTER` | `lgtm-cluster` | (create-gke.sh 인자) |
 | `GKE_ZONE` | `us-central1-a` | (create-gke.sh 인자) |
 | `DRY_RUN` | `0` | `1`이면 실제 실행 없이 명령만 출력 |
+
+---
+
+## 📸 실행 결과 (스크린샷)
+
+배포 직후 트래픽 제너레이터가 8개 엔드포인트로 무작위 요청을 보내면, **Grafana 한 화면에서 메트릭·로그·트레이스가 동시에** 흐릅니다.
+
+### 1. 대시보드 상단 — KPI + 시계열
+
+![Dashboard Top](docs/screenshots/01-dashboard-top.png)
+
+화면에서 확인 가능한 항목:
+
+| 패널 | 실제 캡처 예시 |
+|---|---|
+| **Total Requests (5m)** | `4.73K` |
+| **Request Rate (RPS)** | `12.1 req/s` |
+| **Error Rate (5xx %)** | `24.6 %` (배경색 임계치 빨강) |
+| **P95 Latency** | `1.57 s` |
+| **Pod Up** | `UP` (녹색) |
+| **RPS by Endpoint** | `/`, `/complex-operation`, `/cpu_task`, `/error_test`, `/health`, `/random_sleep`, `/random_status`, `/to_stack` 별 RPS stacked |
+| **HTTP Status Codes** | `200`, `201`, `204`, `400`, `401`, `403`, `404`, `500`, `502` 색상 구분(2xx 녹·4xx 노·5xx 빨) |
+| **Latency Percentiles** | p50 / p95 / p99 |
+
+### 2. 대시보드 하단 — 리소스 + Logs + Traces
+
+![Dashboard Bottom](docs/screenshots/02-dashboard-bottom.png)
+
+- **Pod CPU / Memory** — kube-state-metrics + cAdvisor 기반
+- **Live Logs (Loki)** — `{service_name=~".+/flask-demo-service|flask-demo-service"} | json` 로 파싱된 실시간 로그 스트림 (트레이스 ID·level·resource 속성 모두 함께)
+- **Recent Traces (Tempo)** — Trace ID · Start time · Service · Name · Duration. **Trace ID 클릭 → 트레이스 상세로 점프** (data link)
+
+### 3. 트레이스 상세 — `/complex-operation`
+
+![Trace Detail](docs/screenshots/03-trace-detail.png)
+
+`/complex-operation` 한 번의 요청이 만든 **10 spans, 1.07s** 트리:
+
+```
+flask-app/flask-demo-service: GET /complex-operation (1.07s)
+└─ complex_operation (1.07s)
+   ├─ database_query     (190.9 ms)
+   ├─ processing         (396.88 ms)
+   ├─ async_task1        (271.10 ms)   ┐
+   ├─ async_task2        (253.01 ms)   ├─ asyncio.gather (병렬)
+   ├─ async_task3        (191.91 ms)   ┘
+   ├─ external_api_call  (122.17 ms)
+   │  └─ GET (requests)  (121.33 ms)
+   └─ final_computation  ( 86.31 ms)
+```
+
+병렬 실행(`asyncio.gather`), 외부 API 호출(`RequestsInstrumentor` 자동 child span), 동기/비동기 혼합 패턴이 한 트레이스에서 모두 시각화됩니다.
+
+### 스크린샷 파일 추가하기
+
+위 이미지 참조는 `docs/screenshots/` 폴더에 같은 이름으로 PNG를 두면 자동으로 렌더링됩니다:
+```
+docs/screenshots/
+├── 01-dashboard-top.png
+├── 02-dashboard-bottom.png
+└── 03-trace-detail.png
+```
 
 ---
 
