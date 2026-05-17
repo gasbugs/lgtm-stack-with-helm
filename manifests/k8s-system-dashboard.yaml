@@ -1,0 +1,174 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-k8s-system
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  k8s-system.json: |
+    {
+      "uid": "k8s-system-otel",
+      "title": "Kubernetes System (OTel + kube-prom + Cilium)",
+      "tags": ["k8s","otel","cilium","system"],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "15s",
+      "time": {"from":"now-30m","to":"now"},
+      "templating": {"list":[
+        {"name":"node","label":"Node","type":"query","datasource":{"type":"prometheus","uid":"prometheus"},
+         "query":"label_values(system_memory_usage_bytes, host_name)","includeAll":true,"multi":true,
+         "current":{"text":"All","value":"$__all"},"refresh":2}
+      ]},
+      "panels": [
+        {"type":"row","title":"Control Plane (kube-prom)","gridPos":{"h":1,"w":24,"x":0,"y":0},"id":100},
+
+        {"type":"stat","title":"API Server QPS","id":1,"gridPos":{"h":5,"w":4,"x":0,"y":1},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"reqps","color":{"mode":"thresholds"},"thresholds":{"mode":"absolute","steps":[{"color":"green"}]}}},
+         "targets":[{"expr":"sum(rate(apiserver_request_total[1m]))","refId":"A"}]},
+
+        {"type":"stat","title":"API Server 5xx %","id":2,"gridPos":{"h":5,"w":4,"x":4,"y":1},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"percent","color":{"mode":"thresholds"},"thresholds":{"mode":"absolute","steps":[{"color":"green"},{"color":"yellow","value":1},{"color":"red","value":5}]}}},
+         "targets":[{"expr":"100 * sum(rate(apiserver_request_total{code=~\"5..\"}[5m])) / clamp_min(sum(rate(apiserver_request_total[5m])),0.001)","refId":"A"}]},
+
+        {"type":"stat","title":"API Server P99 (s)","id":3,"gridPos":{"h":5,"w":4,"x":8,"y":1},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"s","color":{"mode":"thresholds"},"thresholds":{"mode":"absolute","steps":[{"color":"green"},{"color":"yellow","value":1},{"color":"red","value":5}]}}},
+         "targets":[{"expr":"histogram_quantile(0.99, sum by(le)(rate(apiserver_request_duration_seconds_bucket[5m])))","refId":"A"}]},
+
+        {"type":"stat","title":"etcd leader changes (5m)","id":4,"gridPos":{"h":5,"w":4,"x":12,"y":1},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"short","color":{"mode":"thresholds"},"thresholds":{"mode":"absolute","steps":[{"color":"green"},{"color":"red","value":1}]}}},
+         "targets":[{"expr":"max(increase(etcd_server_leader_changes_seen_total[5m]))","refId":"A"}]},
+
+        {"type":"stat","title":"Workqueue depth (max)","id":5,"gridPos":{"h":5,"w":4,"x":16,"y":1},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"short"}},
+         "targets":[{"expr":"max(workqueue_depth)","refId":"A"}]},
+
+        {"type":"stat","title":"CoreDNS QPS","id":6,"gridPos":{"h":5,"w":4,"x":20,"y":1},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"reqps"}},
+         "targets":[{"expr":"sum(rate(coredns_dns_requests_total[1m]))","refId":"A"}]},
+
+        {"type":"timeseries","title":"API Server requests by verb","id":10,"gridPos":{"h":8,"w":12,"x":0,"y":6},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"reqps","custom":{"fillOpacity":15,"lineWidth":2,"stacking":{"mode":"normal"}}}},
+         "options":{"legend":{"displayMode":"table","placement":"right","calcs":["mean","max"]},"tooltip":{"mode":"multi"}},
+         "targets":[{"expr":"sum by(verb)(rate(apiserver_request_total[1m]))","legendFormat":"{{verb}}","refId":"A"}]},
+
+        {"type":"timeseries","title":"Controller-manager workqueue depth","id":11,"gridPos":{"h":8,"w":12,"x":12,"y":6},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"short","custom":{"fillOpacity":10,"lineWidth":2}}},
+         "options":{"legend":{"displayMode":"table","placement":"right","calcs":["mean","max"]},"tooltip":{"mode":"multi"}},
+         "targets":[{"expr":"sum by(name)(workqueue_depth)","legendFormat":"{{name}}","refId":"A"}]},
+
+        {"type":"row","title":"Node / Host (OTel hostmetrics)","gridPos":{"h":1,"w":24,"x":0,"y":14},"id":200},
+
+        {"type":"timeseries","title":"Load average (1m)","id":20,"gridPos":{"h":7,"w":8,"x":0,"y":15},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"short","custom":{"fillOpacity":10,"lineWidth":2}}},
+         "options":{"legend":{"displayMode":"list","placement":"bottom"},"tooltip":{"mode":"multi"}},
+         "targets":[{"expr":"system_cpu_load_average_1m{host_name=~\"$node\"}","legendFormat":"{{host_name}}","refId":"A"}]},
+
+        {"type":"timeseries","title":"Memory usage (bytes)","id":21,"gridPos":{"h":7,"w":8,"x":8,"y":15},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"bytes","custom":{"fillOpacity":15,"lineWidth":2}}},
+         "options":{"legend":{"displayMode":"list","placement":"bottom"},"tooltip":{"mode":"multi"}},
+         "targets":[{"expr":"sum by(host_name,state)(system_memory_usage_bytes{host_name=~\"$node\",state=~\"used|cached|buffered\"})","legendFormat":"{{host_name}} {{state}}","refId":"A"}]},
+
+        {"type":"timeseries","title":"Disk I/O (bytes/s)","id":22,"gridPos":{"h":7,"w":8,"x":16,"y":15},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"Bps","custom":{"fillOpacity":15,"lineWidth":2}}},
+         "options":{"legend":{"displayMode":"list","placement":"bottom"},"tooltip":{"mode":"multi"}},
+         "targets":[{"expr":"sum by(host_name,direction)(rate(system_disk_io_bytes_total{host_name=~\"$node\"}[1m]))","legendFormat":"{{host_name}} {{direction}}","refId":"A"}]},
+
+        {"type":"timeseries","title":"Network I/O (bytes/s)","id":23,"gridPos":{"h":7,"w":12,"x":0,"y":22},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"Bps","custom":{"fillOpacity":15,"lineWidth":2}}},
+         "options":{"legend":{"displayMode":"table","placement":"right","calcs":["mean"]},"tooltip":{"mode":"multi"}},
+         "targets":[{"expr":"sum by(host_name,direction)(rate(system_network_io_bytes_total{host_name=~\"$node\"}[1m]))","legendFormat":"{{host_name}} {{direction}}","refId":"A"}]},
+
+        {"type":"timeseries","title":"Filesystem usage","id":24,"gridPos":{"h":7,"w":12,"x":12,"y":22},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"bytes","custom":{"fillOpacity":10,"lineWidth":2}}},
+         "options":{"legend":{"displayMode":"list","placement":"bottom"},"tooltip":{"mode":"multi"}},
+         "targets":[{"expr":"sum by(host_name,state)(system_filesystem_usage_bytes{host_name=~\"$node\",state=\"used\"})","legendFormat":"{{host_name}}","refId":"A"}]},
+
+        {"type":"row","title":"Pods (OTel kubeletstats)","gridPos":{"h":1,"w":24,"x":0,"y":29},"id":300},
+
+        {"type":"timeseries","title":"Top 10 Pods by CPU","id":30,"gridPos":{"h":8,"w":12,"x":0,"y":30},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"none","custom":{"fillOpacity":10,"lineWidth":2}}},
+         "options":{"legend":{"displayMode":"table","placement":"right","calcs":["mean","max"]},"tooltip":{"mode":"multi"}},
+         "targets":[{"expr":"topk(10, sum by(k8s_pod_name)(k8s_pod_cpu_usage))","legendFormat":"{{k8s_pod_name}}","refId":"A"}]},
+
+        {"type":"timeseries","title":"Top 10 Pods by Memory (Working Set)","id":31,"gridPos":{"h":8,"w":12,"x":12,"y":30},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"bytes","custom":{"fillOpacity":10,"lineWidth":2}}},
+         "options":{"legend":{"displayMode":"table","placement":"right","calcs":["mean","max"]},"tooltip":{"mode":"multi"}},
+         "targets":[{"expr":"topk(10, sum by(k8s_pod_name)(k8s_pod_memory_working_set_bytes))","legendFormat":"{{k8s_pod_name}}","refId":"A"}]},
+
+        {"type":"timeseries","title":"Pod Network I/O (bytes/s)","id":32,"gridPos":{"h":7,"w":24,"x":0,"y":38},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"Bps","custom":{"fillOpacity":10,"lineWidth":2}}},
+         "options":{"legend":{"displayMode":"table","placement":"right","calcs":["mean"]},"tooltip":{"mode":"multi"}},
+         "targets":[{"expr":"topk(10, sum by(k8s_pod_name,direction)(rate(k8s_pod_network_io_bytes_total[1m])))","legendFormat":"{{k8s_pod_name}} {{direction}}","refId":"A"}]},
+
+        {"type":"row","title":"Cilium / Hubble","gridPos":{"h":1,"w":24,"x":0,"y":45},"id":400},
+
+        {"type":"stat","title":"Cilium endpoints","id":40,"gridPos":{"h":5,"w":6,"x":0,"y":46},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"short"}},
+         "targets":[{"expr":"count(cilium_endpoint_state{endpoint_state=\"ready\"})","refId":"A"}]},
+
+        {"type":"stat","title":"Hubble flows /s","id":41,"gridPos":{"h":5,"w":6,"x":6,"y":46},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"short"}},
+         "targets":[{"expr":"sum(rate(hubble_flows_processed_total[1m]))","refId":"A"}]},
+
+        {"type":"stat","title":"Drops /s","id":42,"gridPos":{"h":5,"w":6,"x":12,"y":46},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"short","color":{"mode":"thresholds"},"thresholds":{"mode":"absolute","steps":[{"color":"green"},{"color":"red","value":1}]}}},
+         "targets":[{"expr":"sum(rate(cilium_drop_count_total[1m]))","refId":"A"}]},
+
+        {"type":"stat","title":"TCP flag events /s","id":43,"gridPos":{"h":5,"w":6,"x":18,"y":46},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"short"}},
+         "targets":[{"expr":"sum(rate(hubble_tcp_flags_total[1m]))","refId":"A"}]},
+
+        {"type":"timeseries","title":"Hubble Flows by Direction & Verdict","id":50,"gridPos":{"h":8,"w":12,"x":0,"y":51},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"short","custom":{"fillOpacity":15,"lineWidth":2,"stacking":{"mode":"normal"}}}},
+         "options":{"legend":{"displayMode":"table","placement":"right","calcs":["sum"]},"tooltip":{"mode":"multi"}},
+         "targets":[{"expr":"sum by(traffic_direction,verdict)(rate(hubble_flows_processed_total[1m]))","legendFormat":"{{traffic_direction}}/{{verdict}}","refId":"A"}]},
+
+        {"type":"timeseries","title":"Cilium Drops by Reason","id":51,"gridPos":{"h":8,"w":12,"x":12,"y":51},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"short","custom":{"fillOpacity":15,"lineWidth":2,"stacking":{"mode":"normal"}}}},
+         "options":{"legend":{"displayMode":"table","placement":"right","calcs":["sum"]},"tooltip":{"mode":"multi"}},
+         "targets":[{"expr":"sum by(reason)(rate(cilium_drop_count_total[1m]))","legendFormat":"{{reason}}","refId":"A"}]},
+
+        {"type":"timeseries","title":"TCP Flags Distribution","id":52,"gridPos":{"h":8,"w":12,"x":0,"y":59},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"short","custom":{"fillOpacity":10,"lineWidth":2}}},
+         "options":{"legend":{"displayMode":"table","placement":"right","calcs":["mean"]},"tooltip":{"mode":"multi"}},
+         "targets":[{"expr":"sum by(flag)(rate(hubble_tcp_flags_total[1m]))","legendFormat":"{{flag}}","refId":"A"}]},
+
+        {"type":"timeseries","title":"Cilium Endpoint State Counts","id":53,"gridPos":{"h":8,"w":12,"x":12,"y":59},
+         "datasource":{"type":"prometheus","uid":"prometheus"},
+         "fieldConfig":{"defaults":{"unit":"short","custom":{"fillOpacity":15,"lineWidth":2,"stacking":{"mode":"normal"}}}},
+         "options":{"legend":{"displayMode":"table","placement":"right","calcs":["mean"]},"tooltip":{"mode":"multi"}},
+         "targets":[{"expr":"sum by(endpoint_state)(cilium_endpoint_state)","legendFormat":"{{endpoint_state}}","refId":"A"}]},
+
+        {"type":"row","title":"System Logs (Loki)","gridPos":{"h":1,"w":24,"x":0,"y":67},"id":500},
+
+        {"type":"logs","title":"kube-system 컨테이너 로그 (Loki)","id":60,"gridPos":{"h":10,"w":24,"x":0,"y":68},
+         "datasource":{"type":"loki","uid":"loki"},
+         "options":{"showTime":true,"wrapLogMessage":true,"enableLogDetails":true,"sortOrder":"Descending","prettifyLogMessage":false,"showCommonLabels":false},
+         "targets":[{"expr":"{namespace=\"kube-system\"} | line_format \"[{{ .pod }}] {{ __line__ }}\"","refId":"A","maxLines":500}]}
+      ]
+    }

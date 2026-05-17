@@ -14,6 +14,7 @@ run() {
 
 run kubectl apply -f "${ROOT}/manifests/grafana-datasources.yaml"
 run kubectl apply -f "${ROOT}/manifests/flask-dashboard.yaml"
+run kubectl apply -f "${ROOT}/manifests/k8s-system-dashboard.yaml"
 
 # 재배포 시 기존 Loki datasource UID가 랜덤으로 남아있을 수 있어 강제 재로드
 if [ "${DRY_RUN:-0}" != "1" ]; then
