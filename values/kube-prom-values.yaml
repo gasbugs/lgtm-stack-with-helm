@@ -1,0 +1,21 @@
+prometheus:
+  prometheusSpec:
+    enableRemoteWriteReceiver: true
+
+grafana:
+  adminPassword: Test1234
+  service:
+    type: LoadBalancer
+
+  sidecar:
+    datasources:
+      enabled: true
+      label: grafana_datasource
+      labelValue: "1"
+      searchNamespace: ALL
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      searchNamespace: ALL
+
+  defaultDashboardsEnabled: true

@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: flask-app
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-flask-app
+  namespace: flask-app
+  labels:
+    app: my-flask-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-flask-app
+  template:
+    metadata:
+      labels:
+        app: my-flask-app
+    spec:
+      containers:
+        - name: my-flask-app
+          image: gasbugs21c/my-flask-app:lgtm
+          ports:
+            - containerPort: 5000
+              name: http
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector-opentelemetry-collector.otel.svc.cluster.local:4317"
+            - name: OTEL_SERVICE_NAME
+              value: "flask-demo-service"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=flask-demo-service,service.namespace=flask-app"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-flask-app
+  namespace: flask-app
+  labels:
+    app: my-flask-app
+spec:
+  type: LoadBalancer
+  selector:
+    app: my-flask-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5000
+      protocol: TCP
