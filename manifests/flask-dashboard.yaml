@@ -191,20 +191,49 @@ data:
           "id": 30,
           "gridPos": {"h": 10, "w": 24, "x": 0, "y": 27},
           "datasource": {"type": "loki", "uid": "loki"},
-          "options": {"showTime": true, "wrapLogMessage": true, "enableLogDetails": true, "sortOrder": "Descending", "dedupStrategy": "none"},
+          "options": {"showTime": true, "wrapLogMessage": true, "enableLogDetails": true, "sortOrder": "Descending", "dedupStrategy": "none", "showCommonLabels": false, "prettifyLogMessage": false},
           "targets": [
-            {"expr": "{service_name=~\".+/$service|$service\"}", "refId": "A"}
+            {
+              "expr": "{service_name=~\".+/$service|$service\"} | json | line_format \"{{ if .level }}[{{ .level }}]{{ else }}[INFO]{{ end }} {{ if .logger }}({{ .logger }}){{ end }} {{ if .msg }}{{ .msg }}{{ else }}{{ __line__ }}{{ end }}{{ if .trace_id }}  trace_id={{ .trace_id }}{{ end }}\"",
+              "refId": "A",
+              "maxLines": 500
+            }
           ]
         },
 
         {
-          "type": "traces",
-          "title": "Recent Traces (Tempo) — TraceQL: {}",
+          "type": "table",
+          "title": "Recent Traces (Tempo)",
           "id": 40,
           "gridPos": {"h": 10, "w": 24, "x": 0, "y": 37},
           "datasource": {"type": "tempo", "uid": "tempo"},
+          "fieldConfig": {
+            "defaults": {"custom": {"align": "auto", "displayMode": "auto"}},
+            "overrides": [
+              {
+                "matcher": {"id": "byName", "options": "traceID"},
+                "properties": [
+                  {"id": "custom.width", "value": 280},
+                  {"id": "links", "value": [
+                    {"title": "View trace", "url": "", "internal": {"datasourceUid": "tempo", "datasourceName": "Tempo", "query": {"query": "${__value.raw}", "queryType": "traceql"}}}
+                  ]}
+                ]
+              },
+              {"matcher": {"id": "byName", "options": "startTime"}, "properties": [{"id": "unit", "value": "dateTimeAsIso"}, {"id": "custom.width", "value": 180}]},
+              {"matcher": {"id": "byName", "options": "duration"}, "properties": [{"id": "unit", "value": "ms"}]}
+            ]
+          },
+          "options": {"showHeader": true},
           "targets": [
-            {"query": "{ resource.service.name=\"flask-demo-service\" }", "queryType": "traceql", "refId": "A", "tableType": "traces", "limit": 20}
+            {
+              "refId": "A",
+              "queryType": "traceqlSearch",
+              "tableType": "traces",
+              "limit": 30,
+              "filters": [
+                {"id": "service-name", "tag": "service.name", "operator": "=", "scope": "resource", "value": ["flask-demo-service"], "valueType": "string"}
+              ]
+            }
           ]
         }
       ]
