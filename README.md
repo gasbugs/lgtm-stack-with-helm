@@ -1,7 +1,6 @@
 # lgtm-stack-with-helm
 
-> Kubernetes(GKE) + OpenTelemetry Collector + **LGTM 스택**(Loki·Grafana·Tempo·Prometheus)을
-> **한 줄 명령으로** 배포하는 통합 관측성(Observability) 실습 환경.
+> Kubernetes(**GKE 또는 kind**) + OpenTelemetry Collector + **LGTM 스택**(Loki·Grafana·Tempo·Prometheus) + 선택적 **Cilium**(eBPF CNI + Hubble L4-L7 관측성)을 **한 줄 명령으로** 배포하는 통합 관측성(Observability) 실습 환경.
 
 ![Dashboard Top](docs/screenshots/01-dashboard-top.png)
 
@@ -17,7 +16,10 @@
 | **로그**   | Loki (SingleBinary) | `:3100` / gateway `:80` |
 | **트레이스** | Tempo (distributed) | `:3200` / OTLP `:4317` |
 | **시각화** | Grafana | LoadBalancer `:80` |
-| **수집기** | OpenTelemetry Collector (deployment) | OTLP `:4317`/`:4318` |
+| **수집기 (앱)** | OpenTelemetry Collector (Deployment) | OTLP `:4317`/`:4318` |
+| **수집기 (노드)** | OpenTelemetry Collector (DaemonSet) | filelog + hostmetrics + kubeletstats |
+| **CNI** (옵션) | Cilium 1.16 + Hubble | kubeProxyReplacement, eBPF flows |
+| **LB** (kind 한정) | MetalLB | L2 advertisement |
 | **데모 앱** | Flask + OTel SDK | LoadBalancer `:80` → `:5000` |
 
 ---
@@ -68,15 +70,26 @@
 ## 한 줄 배포
 
 ```bash
-# A. GKE 자동 생성 + 전체 배포 (gcloud fsi* 프로젝트 자동 선택)
+# A. GKE 자동 생성 (gcloud fsi* 프로젝트 자동 선택)
 CREATE_GKE=1 bash deploy.sh
 
-# B. 이미 있는 클러스터에 배포
+# B. kind 클러스터 + metallb + (선택) cilium
+USE_KIND=1 bash deploy.sh                        # 기본 CNI(kindnet) + kube-proxy
+USE_KIND=1 WITH_CILIUM=1 bash deploy.sh          # Cilium eBPF + Hubble + kube-proxy 대체
+
+# C. 이미 있는 클러스터에 배포
 bash deploy.sh
 
-# C. 명령어만 출력 (안전 점검)
+# D. 명령어만 출력 (안전 점검)
 DRY_RUN=1 bash deploy.sh
 ```
+
+| 환경 변수 | 효과 | 추가되는 단계 |
+|---|---|---|
+| `CREATE_GKE=1` | GCP에 `lgtm-cluster` 신규 생성 | `create-gke.sh` |
+| `USE_KIND=1` | 로컬 docker에 kind 클러스터 생성 | `create-kind.sh`, `01b-metallb.sh`, `03b-otel-agent.sh` |
+| `WITH_CILIUM=1` | Cilium CNI + Hubble L4-L7 메트릭 | `01c-cilium.sh`, `02b-cilium-metrics.sh`, kube-prom의 kube-proxy ServiceMonitor 비활성화 |
+| `DRY_RUN=1` | 모든 명령 echo만 |  |
 
 배포가 끝나면 마지막에 외부 IP가 출력됩니다:
 
@@ -165,22 +178,33 @@ docs/screenshots/
 
 ---
 
-## 미리 만들어둔 Grafana 대시보드
+## 미리 만들어둔 Grafana 대시보드 (2개)
 
-**Flask App — Observability (LGTM)** — Grafana sidecar가 ConfigMap을 자동 로드합니다.
+ConfigMap 라벨 `grafana_dashboard=1` 로 Grafana sidecar가 자동 로드.
 
-- 상단 KPI: 총 요청 수, RPS, 5xx 에러율, P95 지연, Pod Up 여부
-- RPS by Endpoint (스택 영역 그래프)
-- HTTP Status (2xx/4xx/5xx 색상 구분)
-- P50 / P95 / P99 Latency
-- Top Endpoints (15분, Bar gauge)
-- Pod CPU / Memory
-- **Loki 라이브 로그** — LogQL `json | line_format` 으로 `[LEVEL] (logger) msg trace_id=...` 형식
-- **Tempo 최근 트레이스** — traceqlSearch 결과 테이블, traceID 클릭 → 트레이스 상세
+### 1. Flask App — Observability (LGTM) — `/d/flask-app-observability`
 
-대시보드 변수:
-- `$service` (Prometheus `label_values(http_request_count_total, service_name)`)
-- `$endpoint` (선택된 service의 endpoint 목록, multi)
+- 상단 KPI: Total Requests · RPS · 5xx Error Rate · P95 Latency · Pod Up
+- RPS by Endpoint / HTTP Status (2xx/4xx/5xx 색상) / P50·95·99 Latency / Top Endpoints
+- Pod CPU·Memory
+- **Loki 라이브 로그** — `json | line_format` 으로 `[LEVEL] (logger) msg trace_id=...`
+- **Tempo 최근 트레이스** — traceqlSearch + traceID 클릭으로 상세 점프
+
+변수: `$service`, `$endpoint`
+
+### 2. Kubernetes System (OTel + kube-prom + Cilium) — `/d/k8s-system-otel`
+
+5개 row, 24개 패널로 시스템 컴포넌트 통합:
+
+| 행 | 패널 | 데이터 출처 |
+|---|---|---|
+| Control Plane | API Server QPS / 5xx% / P99 / etcd leader / Workqueue / CoreDNS QPS / API by verb | kube-prom ServiceMonitor |
+| Node / Host | Load 1m / Memory / Disk I/O / Network I/O / Filesystem | **OTel hostmetrics (DaemonSet)** |
+| Pods | Top10 CPU / Top10 Memory / Pod Network I/O | **OTel kubeletstats (DaemonSet)** |
+| Cilium / Hubble | Endpoints / Flows·Drops·TCP flags KPI / Flows by direction-verdict / Drops by reason / Endpoint state | Cilium/Hubble ServiceMonitor |
+| System Logs | kube-system 컨테이너 로그 (cilium-agent 등) | Loki (OTel agent filelog) |
+
+변수: `$node` (host_name)
 
 ---
 
@@ -194,26 +218,38 @@ docs/screenshots/
 ├── README.md
 │
 ├── scripts/                 # 배포 단계별 스크립트
-│   ├── create-gke.sh        # GKE 클러스터 생성 (CREATE_GKE=1일 때)
+│   ├── create-gke.sh        # GKE 클러스터 생성 (CREATE_GKE=1)
+│   ├── create-kind.sh       # kind 클러스터 생성 (USE_KIND=1)
 │   ├── 00-prereq.sh         # 도구 확인
 │   ├── 01-repos.sh          # helm repo + 네임스페이스
+│   ├── 01b-metallb.sh       # MetalLB (USE_KIND=1, LB 지원)
+│   ├── 01c-cilium.sh        # Cilium 1단계 — CNI/Hubble (WITH_CILIUM=1)
 │   ├── 02-lgtm.sh           # Loki + Tempo + kube-prometheus-stack
-│   ├── 03-otel.sh           # OTel Collector
+│   ├── 02b-cilium-metrics.sh # Cilium 2단계 — ServiceMonitor (LGTM CRD 후)
+│   ├── 03-otel.sh           # OTel Collector (Deployment, 앱 신호 수집)
+│   ├── 03b-otel-agent.sh    # OTel Collector (DaemonSet, 노드 신호) — USE_KIND=1
 │   ├── 04-datasources.sh    # Grafana DataSource + Dashboard ConfigMap
 │   ├── 05-flask-app.sh      # Flask 앱
 │   ├── 06-traffic.sh        # 트래픽 제너레이터(백그라운드)
 │   └── traffic_gen.sh       # 트래픽 루프 본체
 │
+├── kind/                    # kind 클러스터 정의
+│   ├── cluster.yaml         # 기본 (kindnet + kube-proxy)
+│   └── cluster-cilium.yaml  # disableDefaultCNI + kubeProxyMode none
+│
 ├── values/                  # Helm values (모든 --set 인자를 파일로)
 │   ├── loki-values.yaml
 │   ├── tempo-values.yaml
-│   ├── kube-prom-values.yaml
-│   └── otel-values.yaml
+│   ├── kube-prom-values.yaml      # 공통 (sidecar enable 등)
+│   ├── kube-prom-values.kind.yaml # kind 전용 (cp 메트릭 활성화)
+│   ├── otel-values.yaml           # OTel Deployment (앱 신호)
+│   └── otel-agent-values.yaml     # OTel DaemonSet (노드 신호)
 │
 ├── manifests/
-│   ├── flask-app.yaml           # ns + deployment + LoadBalancer + probes
-│   ├── grafana-datasources.yaml # sidecar 자동 로드 (Loki/Tempo)
-│   └── flask-dashboard.yaml     # sidecar 자동 로드 대시보드
+│   ├── flask-app.yaml             # ns + deployment + LoadBalancer + probes
+│   ├── grafana-datasources.yaml   # sidecar 자동 로드 (Loki/Tempo)
+│   ├── flask-dashboard.yaml       # 앱 대시보드
+│   └── k8s-system-dashboard.yaml  # K8s 시스템 대시보드
 │
 ├── flask-app/               # OTel-instrumented 데모 앱 소스
 │   ├── app.py
@@ -300,18 +336,16 @@ podman manifest push --all "$IMG" "docker://$IMG"
 
 ## 정리
 
-앱·LGTM·OTel만 삭제 (클러스터는 유지):
+앱·LGTM·OTel·cilium·metallb 삭제 (클러스터는 유지):
 ```bash
-bash cleanup.sh
-
-# 네임스페이스를 살리고 싶다면
-bash cleanup.sh --keep-ns
+bash cleanup.sh                   # 기본
+bash cleanup.sh --keep-ns         # 네임스페이스 보존
 ```
 
-클러스터까지 삭제:
+클러스터까지 통째로:
 ```bash
-gcloud container clusters delete lgtm-cluster \
-  --zone=us-central1-a --project=<fsi-project>
+bash cleanup.sh --delete-kind     # kind: kubectl 단계 건너뛰고 클러스터 삭제
+gcloud container clusters delete lgtm-cluster --zone=us-central1-a --project=<fsi-project>   # GKE
 ```
 
 ---
@@ -355,10 +389,35 @@ bash tests/e2e/test_feat-007.sh   # deploy.sh 오케스트레이터
 - Collector 서비스: `kubectl -n otel get svc`
 
 ### LoadBalancer EXTERNAL-IP가 `<pending>`
-- GCP 외 환경에서 LB Controller가 없을 수 있음 → `port-forward`로 우회:
-  ```bash
-  kubectl -n monitoring port-forward svc/my-prom-grafana 3000:80
-  ```
+- GCP 외 환경에서 LB Controller가 없을 수 있음. kind는 `USE_KIND=1`이면 MetalLB가 자동으로 docker network 대역(예 `172.18.255.200-250`) IP를 할당.
+- 그래도 안 되면 `port-forward`로 우회: `kubectl -n monitoring port-forward svc/my-prom-grafana 3000:80`
+
+### kind에서 MetalLB IPAddressPool 생성 실패 (`invalid CIDR`)
+- docker network에 IPv4와 IPv6가 둘 다 있을 때 IPv6를 잘못 골라서 발생.
+- `01b-metallb.sh`는 `grep -v ':'` 로 IPv4만 필터함. 직접 만들 때도 같은 패턴 사용.
+
+### kind 환경에서 OTel kubeletstats가 `x509: cannot validate certificate`
+- kind kubelet은 self-signed cert → `values/otel-agent-values.yaml`의 `kubeletstats` receiver에 `insecure_skip_verify: true` 명시되어 있음.
+
+### kind 환경에서 컨트롤 플레인 메트릭이 안 보임
+- 기본 kind는 controller-manager/scheduler/etcd가 `127.0.0.1` 바인딩 → `ServiceMonitor`가 스크랩 불가.
+- `kind/cluster.yaml` 의 `kubeadmConfigPatches`로 `bind-address: 0.0.0.0`, etcd `listen-metrics-urls: http://0.0.0.0:2381` 강제.
+
+### Cilium ServiceMonitor가 Prometheus 타겟으로 안 잡힘
+- kube-prometheus-stack 기본 selector는 `release` 라벨만 매칭 → 외부 차트(cilium 등)의 ServiceMonitor 무시.
+- `values/kube-prom-values.kind.yaml`의 `serviceMonitorSelectorNilUsesHelmValues: false` + 빈 selector로 모든 ServiceMonitor 픽업.
+
+### Cilium 설치 시 `ServiceMonitor CRD 없음` 오류
+- cilium chart는 install 시 CRD를 검증. LGTM(prometheus-operator)이 cilium 이후라 CRD가 없음.
+- 본 프로젝트는 cilium을 2단계로 분리: `01c-cilium.sh`(CNI만) → `02b-cilium-metrics.sh`(LGTM 뒤 ServiceMonitor 활성화).
+
+### MetalLB IP는 docker network 내부 — VM 밖에서 접근하려면
+docker bridge 대역(`172.18.x.x`)은 호스트(VM) 안에서만 라우팅됨. VM의 public IP에서 접근하려면 `socat`으로 포트 노출:
+```bash
+sudo systemd-run --unit=socat-grafana socat TCP4-LISTEN:80,fork,reuseaddr   TCP:172.18.255.200:80
+sudo systemd-run --unit=socat-flask    socat TCP4-LISTEN:8080,fork,reuseaddr TCP:172.18.255.201:80
+```
+방화벽 규칙은 별도로 80/8080 열어야 함.
 
 ---
 
