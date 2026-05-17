@@ -1,0 +1,211 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-flask
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  flask-app.json: |
+    {
+      "uid": "flask-app-observability",
+      "title": "Flask App — Observability (LGTM)",
+      "tags": ["flask", "lgtm", "otel"],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "10s",
+      "time": {"from": "now-15m", "to": "now"},
+      "templating": {
+        "list": [
+          {
+            "name": "service",
+            "label": "Service",
+            "type": "query",
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
+            "query": "label_values(http_request_count_total, service_name)",
+            "current": {"text": "flask-demo-service", "value": "flask-demo-service"},
+            "refresh": 1,
+            "includeAll": false
+          },
+          {
+            "name": "endpoint",
+            "label": "Endpoint",
+            "type": "query",
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
+            "query": "label_values(http_request_count_total{service_name=\"$service\"}, endpoint)",
+            "refresh": 2,
+            "includeAll": true,
+            "multi": true,
+            "current": {"text": "All", "value": "$__all"}
+          }
+        ]
+      },
+      "panels": [
+        {
+          "type": "stat",
+          "title": "Total Requests (5m)",
+          "id": 1,
+          "gridPos": {"h": 4, "w": 5, "x": 0, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "options": {"colorMode": "value", "graphMode": "area", "textMode": "auto"},
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "blue"}]}, "unit": "short"}},
+          "targets": [
+            {"expr": "sum(increase(http_request_count_total{service_name=\"$service\"}[5m]))", "refId": "A"}
+          ]
+        },
+        {
+          "type": "stat",
+          "title": "Request Rate (RPS)",
+          "id": 2,
+          "gridPos": {"h": 4, "w": 5, "x": 5, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "options": {"colorMode": "value", "graphMode": "area"},
+          "fieldConfig": {"defaults": {"unit": "reqps", "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green"}, {"color": "yellow", "value": 5}, {"color": "red", "value": 20}]}}},
+          "targets": [
+            {"expr": "sum(rate(http_request_count_total{service_name=\"$service\"}[1m]))", "refId": "A"}
+          ]
+        },
+        {
+          "type": "stat",
+          "title": "Error Rate (5xx %)",
+          "id": 3,
+          "gridPos": {"h": 4, "w": 5, "x": 10, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "options": {"colorMode": "background", "graphMode": "area"},
+          "fieldConfig": {"defaults": {"unit": "percent", "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green"}, {"color": "yellow", "value": 1}, {"color": "red", "value": 5}]}}},
+          "targets": [
+            {"expr": "100 * sum(rate(http_server_duration_milliseconds_count{service_name=\"$service\", http_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_duration_milliseconds_count{service_name=\"$service\"}[5m])), 0.001)", "refId": "A"}
+          ]
+        },
+        {
+          "type": "stat",
+          "title": "P95 Latency",
+          "id": 4,
+          "gridPos": {"h": 4, "w": 5, "x": 15, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "options": {"colorMode": "value", "graphMode": "area"},
+          "fieldConfig": {"defaults": {"unit": "ms", "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green"}, {"color": "yellow", "value": 500}, {"color": "red", "value": 2000}]}}},
+          "targets": [
+            {"expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_duration_milliseconds_bucket{service_name=\"$service\"}[5m])))", "refId": "A"}
+          ]
+        },
+        {
+          "type": "stat",
+          "title": "Pod Up",
+          "id": 5,
+          "gridPos": {"h": 4, "w": 4, "x": 20, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "options": {"colorMode": "background"},
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "red"}, {"color": "green", "value": 1}]}, "mappings": [{"type": "value", "options": {"0": {"text": "DOWN"}, "1": {"text": "UP"}}}]}},
+          "targets": [
+            {"expr": "max(kube_deployment_status_replicas_available{namespace=\"flask-app\", deployment=\"my-flask-app\"}) > bool 0", "refId": "A"}
+          ]
+        },
+
+        {
+          "type": "timeseries",
+          "title": "RPS by Endpoint",
+          "id": 10,
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "reqps", "custom": {"fillOpacity": 20, "lineWidth": 2, "stacking": {"mode": "normal"}}}},
+          "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["mean", "max"]}, "tooltip": {"mode": "multi"}},
+          "targets": [
+            {"expr": "sum by (endpoint) (rate(http_request_count_total{service_name=\"$service\", endpoint=~\"$endpoint\"}[1m]))", "legendFormat": "{{endpoint}}", "refId": "A"}
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "HTTP Status Codes",
+          "id": 11,
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "reqps", "custom": {"fillOpacity": 30, "lineWidth": 2, "stacking": {"mode": "normal"}}},
+            "overrides": [
+              {"matcher": {"id": "byRegexp", "options": "^2.."}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
+              {"matcher": {"id": "byRegexp", "options": "^4.."}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "yellow"}}]},
+              {"matcher": {"id": "byRegexp", "options": "^5.."}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]}
+            ]},
+          "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["sum"]}, "tooltip": {"mode": "multi"}},
+          "targets": [
+            {"expr": "sum by (http_status_code) (rate(http_server_duration_milliseconds_count{service_name=\"$service\"}[1m]))", "legendFormat": "{{http_status_code}}", "refId": "A"}
+          ]
+        },
+
+        {
+          "type": "timeseries",
+          "title": "Latency Percentiles (ms)",
+          "id": 12,
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "ms", "custom": {"fillOpacity": 10, "lineWidth": 2}}},
+          "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"]}, "tooltip": {"mode": "multi"}},
+          "targets": [
+            {"expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_duration_milliseconds_bucket{service_name=\"$service\"}[5m])))", "legendFormat": "p50", "refId": "A"},
+            {"expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_duration_milliseconds_bucket{service_name=\"$service\"}[5m])))", "legendFormat": "p95", "refId": "B"},
+            {"expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_duration_milliseconds_bucket{service_name=\"$service\"}[5m])))", "legendFormat": "p99", "refId": "C"}
+          ]
+        },
+        {
+          "type": "bargauge",
+          "title": "Top Endpoints (15m)",
+          "id": 13,
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "short", "color": {"mode": "continuous-GrYlRd"}}},
+          "options": {"orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true, "valueMode": "color"},
+          "targets": [
+            {"expr": "topk(10, sum by (endpoint) (increase(http_request_count_total{service_name=\"$service\"}[15m])))", "legendFormat": "{{endpoint}}", "refId": "A", "format": "table", "instant": true}
+          ]
+        },
+
+        {
+          "type": "timeseries",
+          "title": "Pod CPU (cores)",
+          "id": 20,
+          "gridPos": {"h": 7, "w": 12, "x": 0, "y": 20},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "short", "custom": {"fillOpacity": 15, "lineWidth": 2}}},
+          "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+          "targets": [
+            {"expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"flask-app\", pod=~\"my-flask-app.*\", container!=\"\"}[1m]))", "legendFormat": "{{pod}}", "refId": "A"}
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Pod Memory (bytes)",
+          "id": 21,
+          "gridPos": {"h": 7, "w": 12, "x": 12, "y": 20},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "bytes", "custom": {"fillOpacity": 15, "lineWidth": 2}}},
+          "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+          "targets": [
+            {"expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"flask-app\", pod=~\"my-flask-app.*\", container!=\"\"})", "legendFormat": "{{pod}}", "refId": "A"}
+          ]
+        },
+
+        {
+          "type": "logs",
+          "title": "Live Logs (Loki)",
+          "id": 30,
+          "gridPos": {"h": 10, "w": 24, "x": 0, "y": 27},
+          "datasource": {"type": "loki", "uid": "loki"},
+          "options": {"showTime": true, "wrapLogMessage": true, "enableLogDetails": true, "sortOrder": "Descending", "dedupStrategy": "none"},
+          "targets": [
+            {"expr": "{service_name=\"$service\"}", "refId": "A"}
+          ]
+        },
+
+        {
+          "type": "traces",
+          "title": "Recent Traces (Tempo) — TraceQL: {}",
+          "id": 40,
+          "gridPos": {"h": 10, "w": 24, "x": 0, "y": 37},
+          "datasource": {"type": "tempo", "uid": "tempo"},
+          "targets": [
+            {"query": "{ resource.service.name=\"flask-demo-service\" }", "queryType": "traceql", "refId": "A", "tableType": "traces", "limit": 20}
+          ]
+        }
+      ]
+    }
