@@ -21,7 +21,7 @@ kubectl -n metallb-system rollout status ds/speaker --timeout=120s
 
 # 2) kind 노드들이 사용하는 docker network 대역을 자동 추출
 #    예: 172.18.0.0/16 → 172.18.255.200~250 풀로 할당
-NET_CIDR=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' kind 2>/dev/null || true)
+NET_CIDR=$(docker network inspect kind --format '{{range .IPAM.Config}}{{println .Subnet}}{{end}}' 2>/dev/null | grep -v ':' | grep -v '^$' | head -1)
 if [ -z "${NET_CIDR}" ]; then
   echo "[01b-metallb] ERROR: docker network 'kind' 를 찾을 수 없습니다 (kind 클러스터가 떠 있어야 합니다)." >&2
   exit 1
