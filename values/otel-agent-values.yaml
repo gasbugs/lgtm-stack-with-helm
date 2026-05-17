@@ -18,13 +18,29 @@ presets:
 
 config:
   receivers:
-    # filelog/hostmetrics/kubeletstats 는 presets 에서 활성화됨
     otlp:
       protocols:
-        grpc:
-          endpoint: 0.0.0.0:4317
-        http:
-          endpoint: 0.0.0.0:4318
+        grpc: { endpoint: 0.0.0.0:4317 }
+        http: { endpoint: 0.0.0.0:4318 }
+
+    # kind kubelet은 self-signed cert → TLS 검증 끄기
+    kubeletstats:
+      auth_type: serviceAccount
+      endpoint: ${env:K8S_NODE_NAME}:10250
+      insecure_skip_verify: true
+      collection_interval: 30s
+      metric_groups: [node, pod, container, volume]
+
+    # 노드 시스템 메트릭 (kind에서는 컨테이너 안이라 cpu/load 등 일부만 정확)
+    hostmetrics:
+      collection_interval: 30s
+      scrapers:
+        cpu: {}
+        load: {}
+        memory: {}
+        disk: {}
+        filesystem: {}
+        network: {}
 
   exporters:
     loki:
