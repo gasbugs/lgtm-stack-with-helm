@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0",
+  "project": "lgtm-stack-with-helm",
+  "last_updated": "2026-05-17",
+  "features": [
+    {
+      "id": "feat-001",
+      "name": "프로젝트 구조 및 init.sh 래퍼",
+      "description": "프로젝트 디렉터리 스켈레톤(scripts/, values/, manifests/, tests/)을 만들고, my-harness init.sh로 위임하는 프로젝트용 init.sh 래퍼를 생성한다.",
+      "priority": "high",
+      "passes": false,
+      "notes": "검증 방법: bash init.sh 실행 시 종료 코드 0 / 증거 필요: init.sh 스모크 테스트 PASS 출력"
+    },
+    {
+      "id": "feat-002",
+      "name": "Helm values 파일 작성 (LGTM)",
+      "description": "Loki(SingleBinary), Tempo(distributed), kube-prometheus-stack용 values.yaml을 values/ 디렉터리에 작성한다. 문서의 --set 인자들을 values 파일로 변환.",
+      "priority": "high",
+      "passes": false,
+      "notes": "검증 방법: helm template 으로 각 values 파일 렌더링이 에러 없이 성공해야 함 / 증거: helm template 출력 일부"
+    },
+    {
+      "id": "feat-003",
+      "name": "Grafana DataSource 자동 프로비저닝",
+      "description": "Grafana sidecar가 자동 로드하는 ConfigMap을 manifests/grafana-datasources.yaml에 작성. Loki(http://loki-gateway.monitoring:80)와 Tempo(http://tempo-query-frontend.monitoring:3200) 데이터소스를 자동 등록.",
+      "priority": "high",
+      "passes": false,
+      "notes": "검증 방법: kubectl apply --dry-run=client -f 로 유효성 검증 / 증거: dry-run 출력"
+    },
+    {
+      "id": "feat-004",
+      "name": "OTel Collector values 및 설치 스크립트",
+      "description": "OpenTelemetry Collector(deployment 모드)의 values.yaml을 작성. otlp 수신기 + Loki(로그)/Prometheus remotewrite(메트릭)/Tempo OTLP gRPC(트레이스) 익스포터 파이프라인 포함.",
+      "priority": "high",
+      "passes": false,
+      "notes": "검증 방법: helm template open-telemetry/opentelemetry-collector -f otel-values.yaml 렌더링 성공 / 증거: 렌더링 출력"
+    },
+    {
+      "id": "feat-005",
+      "name": "테스트 Flask 앱 매니페스트",
+      "description": "ns/flask-app + deployment(gasbugs21c/my-flask-app:lgtm) + LoadBalancer 서비스 매니페스트를 manifests/flask-app.yaml에 작성.",
+      "priority": "medium",
+      "passes": false,
+      "notes": "검증 방법: kubectl apply --dry-run=client -f / 증거: dry-run 출력"
+    },
+    {
+      "id": "feat-006",
+      "name": "트래픽 제너레이터 스크립트",
+      "description": "다양한 엔드포인트(/health, /to_stack, /complex-operation 등)로 1초마다 무작위 요청을 보내는 traffic_gen.sh를 작성. 첫 인자로 base URL 받음.",
+      "priority": "medium",
+      "passes": false,
+      "notes": "검증 방법: bash -n traffic_gen.sh / 증거: syntax check pass"
+    },
+    {
+      "id": "feat-007",
+      "name": "deploy.sh 오케스트레이터",
+      "description": "scripts/00~06을 순서대로 실행하는 단일 진입점 deploy.sh. set -euo pipefail로 실패 시 즉시 중단, 단계별 진행 로그 출력.",
+      "priority": "high",
+      "passes": false,
+      "notes": "검증 방법: bash -n deploy.sh + 더미 모드(DRY_RUN=1)로 모든 스크립트가 호출 검증 / 증거: 더미 실행 출력"
+    },
+    {
+      "id": "feat-008",
+      "name": "cleanup.sh 삭제 스크립트",
+      "description": "helm uninstall, ns 삭제, 매니페스트 삭제를 역순으로 수행하는 cleanup.sh.",
+      "priority": "medium",
+      "passes": false,
+      "notes": "검증 방법: bash -n cleanup.sh + DRY_RUN=1 실행 / 증거: 출력 캡처"
+    },
+    {
+      "id": "feat-009",
+      "name": "E2E 통합 검증 스크립트",
+      "description": "tests/e2e/test_full.sh 작성. 모든 helm template 렌더링, kubectl dry-run, bash 문법 검증을 한 번에 실행하여 전체 시스템 무결성을 확인.",
+      "priority": "high",
+      "passes": false,
+      "notes": "검증 방법: bash tests/e2e/test_full.sh 종료 코드 0 / 증거: PASS 출력 전체"
+    }
+  ]
+}
