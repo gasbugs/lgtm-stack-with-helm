@@ -193,7 +193,7 @@ data:
           "datasource": {"type": "loki", "uid": "loki"},
           "options": {"showTime": true, "wrapLogMessage": true, "enableLogDetails": true, "sortOrder": "Descending", "dedupStrategy": "none"},
           "targets": [
-            {"expr": "{service_name=\"$service\"}", "refId": "A"}
+            {"expr": "{service_name=~\".+/$service|$service\"}", "refId": "A"}
           ]
         },
 
