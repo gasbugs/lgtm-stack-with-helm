@@ -55,3 +55,16 @@ kubeEtcd:
 
 coreDns:
   enabled: true
+
+# Cilium/Hubble 등 외부 차트가 만든 ServiceMonitor 까지 Prometheus 가 자동 픽업
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    podMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelector: {}
+    podMonitorNamespaceSelector: {}
+    ruleSelectorNilUsesHelmValues: false
+    ruleSelector: {}
+    ruleNamespaceSelector: {}
