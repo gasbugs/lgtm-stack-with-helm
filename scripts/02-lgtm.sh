@@ -20,6 +20,10 @@ PROM_ARGS=(-f "${ROOT}/values/kube-prom-values.yaml")
 if [ "${USE_KIND:-0}" = "1" ]; then
   PROM_ARGS+=(-f "${ROOT}/values/kube-prom-values.kind.yaml")
   echo "[02-lgtm] kind 오버라이드 적용 (컨트롤 플레인 컴포넌트 메트릭 수집 활성화)"
+  if [ "${WITH_CILIUM:-0}" = "1" ]; then
+    PROM_ARGS+=(--set kubeProxy.enabled=false)
+    echo "[02-lgtm] cilium 모드: kube-proxy ServiceMonitor 비활성화 (cilium이 대체)"
+  fi
 fi
 
 run helm upgrade --install my-prom prometheus-community/kube-prometheus-stack \

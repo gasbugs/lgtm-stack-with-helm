@@ -5,7 +5,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 CLUSTER="${1:-lgtm}"
-CONFIG="${ROOT}/kind/cluster.yaml"
+if [ "${WITH_CILIUM:-0}" = "1" ]; then
+  CONFIG="${ROOT}/kind/cluster-cilium.yaml"
+  echo "[create-kind] WITH_CILIUM=1 → CNI 없는 config 사용 (cilium이 설치 후 CNI 담당)"
+else
+  CONFIG="${ROOT}/kind/cluster.yaml"
+fi
 
 if [ "${DRY_RUN:-0}" = "1" ]; then
   echo "[create-kind] DRY: kind create cluster --name ${CLUSTER} --config ${CONFIG}"

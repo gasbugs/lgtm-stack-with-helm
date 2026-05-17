@@ -1,0 +1,29 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: lgtm
+
+networking:
+  disableDefaultCNI: true   # kindnet 비활성화 → cilium이 CNI 담당
+  kubeProxyMode: none       # cilium kubeProxyReplacement 사용
+
+kubeadmConfigPatches:
+  - |
+    kind: ClusterConfiguration
+    controllerManager:
+      extraArgs:
+        bind-address: 0.0.0.0
+    scheduler:
+      extraArgs:
+        bind-address: 0.0.0.0
+    etcd:
+      local:
+        extraArgs:
+          listen-metrics-urls: http://0.0.0.0:2381
+
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - { containerPort: 30080, hostPort: 30080, protocol: TCP }
+      - { containerPort: 30081, hostPort: 30081, protocol: TCP }
+  - role: worker
+  - role: worker

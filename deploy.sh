@@ -10,7 +10,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export USE_KIND="${USE_KIND:-0}"
 export CREATE_GKE="${CREATE_GKE:-0}"
+export WITH_CILIUM="${WITH_CILIUM:-0}"
 export DRY_RUN="${DRY_RUN:-0}"
+
+if [ "${WITH_CILIUM}" = "1" ] && [ "${USE_KIND}" != "1" ]; then
+  echo "[deploy] WITH_CILIUM=1 은 USE_KIND=1 과 함께 사용해야 합니다." >&2
+  exit 1
+fi
 
 if [ "${CREATE_GKE}" = "1" ] && [ "${USE_KIND}" = "1" ]; then
   echo "[deploy] ERROR: CREATE_GKE 와 USE_KIND 를 동시에 지정할 수 없습니다." >&2
@@ -35,6 +41,9 @@ steps+=(
 
 # 1b) kind에서만 metallb 설치 (LoadBalancer 지원)
 [ "${USE_KIND}" = "1" ] && steps+=("01b-metallb.sh")
+
+# 1c) cilium 설치 (옵션)
+[ "${WITH_CILIUM}" = "1" ] && steps+=("01c-cilium.sh")
 
 steps+=(
   "02-lgtm.sh"
