@@ -39,11 +39,11 @@ steps+=(
   "01-repos.sh"
 )
 
-# 1b) kind에서만 metallb 설치 (LoadBalancer 지원)
-[ "${USE_KIND}" = "1" ] && steps+=("01b-metallb.sh")
-
-# 1c) cilium 설치 (옵션)
+# 1c) cilium 먼저 설치 (CNI — 노드 Ready 전제)
 [ "${WITH_CILIUM}" = "1" ] && steps+=("01c-cilium.sh")
+
+# 1b) kind metallb 설치 (LoadBalancer 지원 — CNI 이후)
+[ "${USE_KIND}" = "1" ] && steps+=("01b-metallb.sh")
 
 steps+=(
   "02-lgtm.sh"
