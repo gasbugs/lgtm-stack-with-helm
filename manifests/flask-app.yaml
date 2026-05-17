@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
         - name: my-flask-app
-          image: us-central1-docker.pkg.dev/fsi20260316/flask-app/my-flask-app:lgtm-v2
+          image: gasbugs21c/my-flask-app:lgtm-v2
           imagePullPolicy: Always
           ports:
             - containerPort: 5000
