@@ -74,6 +74,14 @@
       "priority": "high",
       "passes": true,
       "notes": "검증 방법: bash tests/e2e/test_full.sh 종료 코드 0 / 증거: PASS 출력 전체"
+    },
+    {
+      "id": "feat-010",
+      "name": "GKE 클러스터 자동 생성",
+      "description": "fsi* GCP 프로젝트에 GKE 클러스터(lgtm-cluster)를 자동 생성하고 kubectl 자격증명을 설정.",
+      "priority": "high",
+      "passes": true,
+      "notes": "검증: gcloud container clusters describe / 증거: 클러스터 생성 후 kubectl get nodes 출력"
     }
   ]
 }
