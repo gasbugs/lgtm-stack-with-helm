@@ -30,10 +30,13 @@ run helm upgrade --install cilium cilium/cilium \
   --set hubble.relay.enabled=true \
   --set hubble.metrics.enabled="{dns,drop,tcp,flow,icmp,httpV2:exemplars=true;labelsContext=source_ip\,source_namespace\,source_workload\,destination_ip\,destination_namespace\,destination_workload\,traffic_direction}" \
   --set hubble.metrics.serviceMonitor.enabled=true \
+  --set hubble.metrics.serviceMonitor.trustCRDsExist=true \
   --set prometheus.enabled=true \
   --set prometheus.serviceMonitor.enabled=true \
+  --set prometheus.serviceMonitor.trustCRDsExist=true \
   --set operator.prometheus.enabled=true \
-  --set operator.prometheus.serviceMonitor.enabled=true
+  --set operator.prometheus.serviceMonitor.enabled=true \
+  --set operator.prometheus.serviceMonitor.trustCRDsExist=true
 
 if [ "${DRY_RUN:-0}" != "1" ]; then
   echo "[01c-cilium] cilium 파드 준비 대기..."
