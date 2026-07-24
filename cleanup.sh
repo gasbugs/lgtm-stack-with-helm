@@ -3,15 +3,18 @@
 # 옵션:
 #   --keep-ns        네임스페이스 보존
 #   --delete-kind    kind 클러스터까지 통째로 삭제 (kubectl/helm 단계 건너뜀)
+#   --kind-addons    kind 전용 Cilium/MetalLB까지 삭제
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 KEEP_NS=0
 DELETE_KIND=0
+KIND_ADDONS=0
 for arg in "$@"; do
   case "${arg}" in
     --keep-ns) KEEP_NS=1 ;;
     --delete-kind) DELETE_KIND=1 ;;
+    --kind-addons) KIND_ADDONS=1 ;;
   esac
 done
 
@@ -52,16 +55,19 @@ run helm uninstall -n otel       otel-collector
 run helm uninstall -n monitoring my-prom
 run helm uninstall -n monitoring tempo
 run helm uninstall -n monitoring loki
-run helm uninstall -n kube-system cilium
 
-# MetalLB (manifest 기반)
-run kubectl delete -f https://raw.githubusercontent.com/metallb/metallb/v0.14.8/config/manifests/metallb-native.yaml --ignore-not-found
+# 클러스터 네트워킹 애드온은 공유 GKE 클러스터에서 삭제하면 안 된다.
+# kind 전용 정리임을 호출자가 명시한 경우에만 제거한다.
+if [ "${KIND_ADDONS}" -eq 1 ]; then
+  run helm uninstall -n kube-system cilium
+  run kubectl delete -f https://raw.githubusercontent.com/metallb/metallb/v0.14.8/config/manifests/metallb-native.yaml --ignore-not-found
+fi
 
 if [ "${KEEP_NS}" -eq 0 ]; then
   run kubectl delete ns otel           --ignore-not-found
   run kubectl delete ns monitoring     --ignore-not-found
   run kubectl delete ns flask-app      --ignore-not-found
-  run kubectl delete ns metallb-system --ignore-not-found
+  [ "${KIND_ADDONS}" -eq 1 ] && run kubectl delete ns metallb-system --ignore-not-found
 else
   echo "[cleanup] --keep-ns 지정 — 네임스페이스 보존"
 fi

@@ -7,18 +7,20 @@ cd "${ROOT}"
 fail=0
 
 render() {
-  local desc="$1" release="$2" chart="$3" vals="$4"
-  if helm template "${release}" "${chart}" -n monitoring -f "${vals}" >/dev/null 2>&1; then
+  local desc="$1" release="$2" chart="$3" vals="$4" chart_version="${5:-}"
+  local chart_args=("${chart}")
+  [ -n "${chart_version}" ] && chart_args+=(--version "${chart_version}")
+  if helm template "${release}" "${chart_args[@]}" -n monitoring -f "${vals}" >/dev/null 2>&1; then
     echo "PASS: ${desc}"
   else
     echo "FAIL: ${desc}"
-    helm template "${release}" "${chart}" -n monitoring -f "${vals}" 2>&1 | tail -10
+    helm template "${release}" "${chart_args[@]}" -n monitoring -f "${vals}" 2>&1 | tail -10
     fail=1
   fi
 }
 
 render "Loki SingleBinary 렌더링" loki grafana/loki values/loki-values.yaml
-render "Tempo distributed 렌더링" tempo grafana-community/tempo-distributed values/tempo-values.yaml
+render "Tempo distributed 2.x 렌더링" tempo grafana-community/tempo-distributed values/tempo-values.yaml 2.26.2
 render "kube-prometheus-stack 렌더링" my-prom prometheus-community/kube-prometheus-stack values/kube-prom-values.yaml
 
 if [ "${fail}" -eq 0 ]; then

@@ -27,6 +27,7 @@ done
 # 핵심 helm/kubectl 명령어들이 DRY로 출력되는지
 echo "${OUT}" | grep -q "helm upgrade --install loki" && echo "PASS: Loki helm 명령 출력" || { echo "FAIL: Loki helm 명령 없음"; fail=1; }
 echo "${OUT}" | grep -q "helm upgrade --install tempo" && echo "PASS: Tempo helm 명령 출력" || { echo "FAIL: Tempo helm 명령 없음"; fail=1; }
+echo "${OUT}" | grep -q -- "--version 2.26.2" && echo "PASS: Tempo 2.x 차트 버전 고정" || { echo "FAIL: Tempo 차트 버전 고정 누락"; fail=1; }
 echo "${OUT}" | grep -q "helm upgrade --install my-prom" && echo "PASS: kube-prometheus-stack helm 명령 출력" || { echo "FAIL: my-prom 없음"; fail=1; }
 echo "${OUT}" | grep -q "helm upgrade --install otel-collector" && echo "PASS: OTel helm 명령 출력" || { echo "FAIL: OTel 없음"; fail=1; }
 

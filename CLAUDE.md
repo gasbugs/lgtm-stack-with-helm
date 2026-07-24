@@ -16,7 +16,8 @@ USE_KIND=1 WITH_CILIUM=1 bash deploy.sh        # kind + cilium(kubeProxyReplacem
 DRY_RUN=1 USE_KIND=1 WITH_CILIUM=1 bash deploy.sh   # 명령 echo만
 
 # 정리
-bash cleanup.sh                # 앱·LGTM·OTel·cilium·metallb 제거 (클러스터 유지)
+bash cleanup.sh                # 앱·LGTM·OTel 제거 (클러스터/네트워킹 유지)
+bash cleanup.sh --kind-addons  # kind 전용 cilium·metallb까지 함께 제거
 bash cleanup.sh --delete-kind  # kind 클러스터 통째로 삭제
 gcloud container clusters delete lgtm-cluster --zone=us-central1-a --project=<fsi>  # GKE 삭제
 

@@ -112,7 +112,13 @@ DRY_RUN=1 bash deploy.sh
 | `CREATE_GKE` | `0` | `1`이면 GKE 클러스터를 먼저 생성 |
 | `GKE_CLUSTER` | `lgtm-cluster` | (create-gke.sh 인자) |
 | `GKE_ZONE` | `us-central1-a` | (create-gke.sh 인자) |
+| `TEMPO_CHART_VERSION` | `2.26.2` | Kafka 없는 분산 구성을 유지하는 최신 Tempo 2.x 차트 |
 | `DRY_RUN` | `0` | `1`이면 실제 실행 없이 명령만 출력 |
+
+> `tempo-distributed` 3.x(Tempo 3.0)는 분산 모드의 쓰기 경로에 Kafka가 필수입니다.
+> 이 실습 환경은 별도 Kafka를 배포하지 않으므로 `2.26.2`(Tempo 2.10.7)를 기본값으로 고정합니다.
+> Tempo 3.x로 올리려면 Kafka와 공유 객체 스토리지를 먼저 구성한 뒤
+> `ingest.kafka.address`, `blockBuilder`, `liveStore`를 함께 마이그레이션해야 합니다.
 
 ---
 
@@ -401,10 +407,11 @@ podman manifest push --all "$IMG" "docker://$IMG"
 
 ## 정리
 
-앱·LGTM·OTel·cilium·metallb 삭제 (클러스터는 유지):
+앱·LGTM·OTel 삭제 (클러스터와 네트워킹 애드온은 유지):
 ```bash
 bash cleanup.sh                   # 기본
 bash cleanup.sh --keep-ns         # 네임스페이스 보존
+bash cleanup.sh --kind-addons     # kind 전용 Cilium·MetalLB도 함께 삭제
 ```
 
 클러스터까지 통째로:

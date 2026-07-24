@@ -3,6 +3,9 @@
 # USE_KIND=1 이면 kube-prometheus-stack에 kind 전용 오버라이드 추가 적용
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# tempo-distributed 3.x(Tempo 3.0)는 분산 모드 쓰기 경로에 Kafka가 필수다.
+# 이 프로젝트는 Kafka 없는 실습 환경이므로, 같은 아키텍처로 동작하는 최신 2.x를 고정한다.
+TEMPO_CHART_VERSION="${TEMPO_CHART_VERSION:-2.26.2}"
 
 run() {
   if [ "${DRY_RUN:-0}" = "1" ]; then echo "[02-lgtm] DRY: $*"; else echo "[02-lgtm] $*"; "$@"; fi
@@ -13,6 +16,7 @@ run helm upgrade --install loki grafana/loki \
   -f "${ROOT}/values/loki-values.yaml"
 
 run helm upgrade --install tempo grafana-community/tempo-distributed \
+  --version "${TEMPO_CHART_VERSION}" \
   -n monitoring \
   -f "${ROOT}/values/tempo-values.yaml"
 
