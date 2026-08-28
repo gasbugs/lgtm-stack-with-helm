@@ -3,7 +3,7 @@ mode: daemonset
 
 image:
   repository: otel/opentelemetry-collector-contrib
-  tag: "0.130.0"
+  tag: "0.158.0"
 
 presets:
   logsCollection:
@@ -43,24 +43,24 @@ config:
         network: {}
 
   exporters:
-    loki:
-      endpoint: http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push
-    prometheusremotewrite:
+    otlp_http/loki:
+      endpoint: http://loki-gateway.monitoring.svc.cluster.local/otlp
+    prometheus_remote_write:
       endpoint: http://my-prom-kube-prometheus-st-prometheus.monitoring.svc.cluster.local:9090/api/v1/write
       resource_to_telemetry_conversion:
         enabled: true
 
   processors:
     batch: {}
-    # k8sattributes 는 presets.kubernetesAttributes 가 자동 구성
+    # k8s_attributes 는 presets.kubernetesAttributes 가 자동 구성
 
   service:
     pipelines:
       logs:
-        receivers: [filelog, otlp]
-        processors: [k8sattributes, batch]
-        exporters: [loki]
+        receivers: [file_log, otlp]
+        processors: [k8s_attributes, batch]
+        exporters: [otlp_http/loki]
       metrics:
         receivers: [hostmetrics, kubeletstats, otlp]
-        processors: [k8sattributes, batch]
-        exporters: [prometheusremotewrite]
+        processors: [k8s_attributes, batch]
+        exporters: [prometheus_remote_write]
